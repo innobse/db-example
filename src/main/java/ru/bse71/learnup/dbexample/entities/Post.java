@@ -1,6 +1,8 @@
 package ru.bse71.learnup.dbexample.entities;
 
+import javax.persistence.*;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Created by bse71
@@ -8,18 +10,31 @@ import java.util.List;
  * Time: 23:41
  */
 
+@Entity
+@Table(name = "posts")
 public class Post {
 
-    private int id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private Integer id;
+
+    @Column
     private String title;
+
+    @Column
     private String text;
 
+    @OneToMany(mappedBy = "post", fetch = FetchType.EAGER, cascade = CascadeType.ALL)
     private List<Comment> comments;
 
-    public Post(int id, String title, String text) {
+    public Post(Integer id, String title, String text) {
         this.id = id;
         this.title = title;
         this.text = text;
+    }
+
+    public Post() {
+
     }
 
     public int getId() {
@@ -52,6 +67,19 @@ public class Post {
 
     public void setComments(List<Comment> comments) {
         this.comments = comments;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Post post = (Post) o;
+        return Objects.equals(id, post.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
     }
 
     @Override

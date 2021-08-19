@@ -1,11 +1,20 @@
 package ru.bse71.learnup.dbexample;
 
-import ru.bse71.learnup.dbexample.entities.Comment;
+import org.hibernate.Session;
+import org.hibernate.SessionFactory;
+import org.hibernate.Transaction;
+import org.hibernate.boot.Metadata;
+import org.hibernate.boot.MetadataSources;
+import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
+import org.hibernate.query.Query;
+import org.hibernate.service.ServiceRegistry;
 import ru.bse71.learnup.dbexample.entities.Post;
 
-import java.sql.*;
-import java.util.ArrayList;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Created by bse71
@@ -20,74 +29,36 @@ public class DbWorker {
     private String user = "postgres";
     private String pass = "dzVkh";
 
+    private SessionFactory sessionFactory;
+
     public void init() throws SQLException {
-        this.connection = DriverManager.getConnection(dbUrl, user, pass);
+        ServiceRegistry serviceRegistry = new StandardServiceRegistryBuilder()
+                .configure().build();
+        Metadata metadata = new MetadataSources(serviceRegistry).getMetadataBuilder().build();
+
+        this.sessionFactory = metadata.getSessionFactoryBuilder().build();
     }
 
-    public List<Post> getPosts() throws SQLException {
-        final Statement statement = connection.createStatement();
-        final PreparedStatement preparedStatement =
-                connection.prepareStatement("SELECT * FROM comments WHERE post_id = ?;");
-
-        final ResultSet resultSet = statement.executeQuery("SELECT * FROM posts;");
-        List<Post> result = new ArrayList<>();
-        while (resultSet.next()) {
-            final int id = resultSet.getInt("id");
-            final String title = resultSet.getString("title");
-            final String text = resultSet.getString("text");
-
-            preparedStatement.setInt(1, id);
-            final ResultSet commentsResultSet = preparedStatement.executeQuery();
-            final List<Comment> comments = getCommentsFromResultSet(commentsResultSet);
-
-            final Post post = new Post(id, title, text);
-            post.setComments(comments);
-
-            result.add(post);
+    public List<Post> getPosts() {
+        try (Session session = sessionFactory.openSession()) {
+            final Query<Post> query = session.createQuery("from Post", Post.class);
+            return query.getResultList();
         }
-        return result;
     }
 
-    public boolean savePost(Post target) throws SQLException {
-        final PreparedStatement preparedStatement =
-                connection.prepareStatement("INSERT INTO posts(id, title, text) VALUES(?, ?, ?);");
-
-        preparedStatement.setInt(1, target.getId());
-        preparedStatement.setString(2, target.getTitle());
-        preparedStatement.setString(3, target.getText());
-
-        final boolean result = preparedStatement.execute();
-
-        if (result) return saveComments(target.getComments(), target.getId());
-        return false;
-    }
-
-    private boolean saveComments(List<Comment> comments, int postId) throws SQLException {
-        if (comments == null) return true;
-        final PreparedStatement preparedStatement =
-                connection.prepareStatement("INSERT INTO comments(id, post_id, text) VALUES(?, ?, ?);");
-
-        for (Comment comment : comments) {
-            preparedStatement.setInt(1, comment.getId());
-            preparedStatement.setInt(2, postId);
-            preparedStatement.setString(3, comment.getText());
-
-            if (!preparedStatement.execute()) return false;
+    public Set<Post> getPostsWithFetch() {
+        try (Session session = sessionFactory.openSession()) {
+            final Query<Post> query = session.createQuery("from Post p join fetch p.comments", Post.class);
+            return new HashSet<>(query.getResultList());
         }
-
-        return true;
     }
 
-    private List<Comment> getCommentsFromResultSet(ResultSet resultSet) throws SQLException {
-        List<Comment> comments = new ArrayList<>();
-        while (resultSet.next()) {
-            final int id = resultSet.getInt("id");
-            final String text = resultSet.getString("text");
-
-            comments.add(
-                    new Comment(id, text));
+    public boolean savePost(Post target) {
+        try (Session session = sessionFactory.openSession()) {
+            final Transaction transaction = session.beginTransaction();
+            session.save(target);
+            transaction.commit();
+            return true;
         }
-
-        return comments;
     }
 }
